@@ -36,8 +36,4 @@ public class Page implements Serializable {
         return null; // Record not found
     }
 
-    @Override
-    public String toString() {
-        return "Page{pageNumber=" + Page_Number + ", records=" + Table_records.size() + "}";
-    }
 }

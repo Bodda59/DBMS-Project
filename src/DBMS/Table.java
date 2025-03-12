@@ -31,8 +31,4 @@ public class Table implements Serializable {
         pages.add(pageNumber);
     }
 
-    @Override
-    public String toString() {
-        return "Table{name='" + tableName + "', columns=" + Arrays.toString(columnsNames) + ", pages=" + pages + "}";
-    }
 }
