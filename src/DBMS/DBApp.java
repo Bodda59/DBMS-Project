@@ -23,7 +23,7 @@ public class DBApp
 		}
 		Table newTable = new Table(tableName, columnsNames);
 		if (!FileManager.storeTable(tableName, newTable)) {
-			System.out.println("Cannot store table proparly ");
+			System.out.println("Cannot store table properly ");
 			return;
 		}
 		System.out.println("Table stored correctly");
@@ -74,6 +74,10 @@ public class DBApp
 	public static ArrayList<String []> select(String tableName)
 	{
 		Table table = FileManager.loadTable(tableName);
+		if (table == null) {
+			throw new IllegalArgumentException("Table " + tableName + " does not exist.");
+		}
+
 		ArrayList<Integer> pages_numbers = table.getPages();
 		ArrayList<String []> result = new ArrayList<>();
         for (Integer pagesNumber : pages_numbers) {
@@ -87,21 +91,30 @@ public class DBApp
 	public static ArrayList<String []> select(String tableName, int pageNumber, int recordNumber)
 	{
 		Table table = FileManager.loadTable(tableName);
+		Page page_data = FileManager.loadTablePage(tableName, pageNumber);
+		if (table == null || pageNumber>table.getPages().getLast() || page_data.getRecord(recordNumber)==null) {
+			throw new IllegalArgumentException("The table doesn't exist or the page number doesn't exist or record");
+		}
+
 		ArrayList<Integer> pages_numbers = table.getPages();
 		ArrayList<String []> result = new ArrayList<>();
-		Page page_data = FileManager.loadTablePage(tableName, pageNumber);
 		ArrayList<String[]> records = page_data.getRecords();
-		result.add(records.get(recordNumber-1));
+		result.add(records.get(recordNumber));
 		return result;
 	}
 
 	public static ArrayList<String []> select(String tableName, String[] cols, String[] vals)
 	{
 		Table table = FileManager.loadTable(tableName);
-		String [] column_names = table.getColumnsNames();
-		ArrayList<Integer> column_num = getColumnNumber(cols, column_names);
+		ArrayList<Integer> column_num = table.getColumnNumber(cols);
+
+		if (table == null) {
+			throw new IllegalArgumentException("Table " + tableName + " does not exist.");
+		}
+
 		ArrayList<Integer> pages_numbers = table.getPages();
 		ArrayList<String []> result = new ArrayList<>();
+
 		for (Integer pagesNumber : pages_numbers) {
 			Page page_data = FileManager.loadTablePage(tableName, pagesNumber);
 			ArrayList<String[]> records = page_data.getRecords();
@@ -123,23 +136,7 @@ public class DBApp
 		}
 		return result;
 	}
-	public static ArrayList<Integer> getColumnNumber(String[] cols, String[] column_names) {
-		ArrayList<Integer> res = new ArrayList<>();
-		for (String col : cols) {
-			boolean found = false;
-			for (int j = 0; j < column_names.length; j++) {
-				if (col.equals(column_names[j])) {
-					res.add(j);
-					found = true;
-					break;
-				}
-			}
-			if (!found) {
-				throw new IllegalArgumentException("Column " + col + " does not exist in table.");
-			}
-		}
-		return res;
-	}
+
 	
 	public static String getFullTrace(String tableName)
 	{
