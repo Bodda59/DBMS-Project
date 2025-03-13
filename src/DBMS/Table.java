@@ -9,10 +9,47 @@ public class Table implements Serializable {
     private String[] columnsNames;
     private ArrayList<Integer> pages;
 
+    //For the Tracing functions
+    private ArrayList<String> traces;
+
     public Table(String tableName, String[] columnsNames) {
         this.tableName = tableName;
         this.columnsNames = columnsNames;
         this.pages = new ArrayList<>();
+
+        //For the tracing functions
+        this.traces=new ArrayList<>();
+        this.traces.add("Table created name:"+tableName+", columnsNames:"+getColumnsTrace(columnsNames));
+    }
+
+
+
+    //For the tracing functions
+    public String getColumnsTrace(String[] columnsNames)
+    {
+        String result="[";
+        for(int i=0;i<columnsNames.length;i++) {
+            if(i==columnsNames.length-1)
+                result+=columnsNames[i]+"]";
+            else
+            result+= columnsNames[i] + ", ";
+        }
+        return result;
+    }
+
+    public void addTrace(String newTrace)
+    {
+        traces.add(newTrace);
+    }
+
+    public String getLastTrace()
+    {
+        return traces.getLast();
+    }
+
+    public ArrayList<String> getAllTraces()
+    {
+        return traces;
     }
 
     public String getTableName() {
