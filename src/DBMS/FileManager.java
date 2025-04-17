@@ -18,11 +18,11 @@ public class FileManager
 	
     public static boolean storeTable(String tableName, Table t)
 	{
-		try {
+		/*try {
 			TimeUnit.MILLISECONDS.sleep(1);
 		} catch (InterruptedException e1) {
 			// TODO Auto-generated catch block
-		}
+		}*/
 		File tableDirectory = new File(directory, tableName);
 		tableDirectory.mkdirs();
 	    File fl = new File(tableDirectory, tableName+".db");
@@ -44,11 +44,11 @@ public class FileManager
     
     public static Table loadTable(String tableName)
 	{
-		try {
+		/*try {
 			TimeUnit.MILLISECONDS.sleep(1);
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
-		}
+		}*/
 		File tableDirectory = new File(directory, tableName);
 	    File fl = new File(tableDirectory, tableName+".db");
 	    
@@ -69,11 +69,11 @@ public class FileManager
     
 	public static boolean storeTablePage(String tableName, int pageNumber, Page p)
 	{
-		try {
+		/*try {
 			TimeUnit.MILLISECONDS.sleep(1);
 		} catch (InterruptedException e1) {
 			
-		}
+		}*/
 		File tableDirectory = new File(directory, tableName);
 		tableDirectory.mkdir();
 	    File fl = new File(tableDirectory, ""+pageNumber+".db");
@@ -95,11 +95,11 @@ public class FileManager
 	
 	public static Page loadTablePage(String tableName, int pageNumber)
 	{
-		try {
+		/*try {
 			TimeUnit.MILLISECONDS.sleep(1);
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
-		}
+		}*/
 		File tableDirectory = new File(directory, tableName);
 	    File fl = new File(tableDirectory, ""+pageNumber+".db");
 	    
