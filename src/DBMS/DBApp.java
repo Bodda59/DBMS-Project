@@ -298,8 +298,21 @@ public class DBApp
 			return "No Table exists";
 		return table.getLastTrace();
 	}
-	
-	
+
+	public static ArrayList<String []> validateRecords(String tableName){
+	}
+	public static void recoverRecords(String tableName, ArrayList<String[]> missing){
+
+	}
+	public static void createBitMapIndex(String tableName, String colName){
+
+	}
+	public static String getValueBits(String tableName, String colName, String value){
+
+	}
+	public static ArrayList<String []> selectIndex(String tableName, String[] cols, String[] vals){
+
+	}
 	public static void main(String []args) throws IOException
 	{
 		FileManager.reset();
