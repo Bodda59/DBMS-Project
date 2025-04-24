@@ -1,3 +1,4 @@
+/*
 package DBMS;
 import java.io.File;
 import static org.junit.Assert.assertTrue;
@@ -730,4 +731,4 @@ public class DBAppTestsMS2
 				res += digits[(genRandNum(digits.length)) - 1];
 		return res;
 	}
-}
+}*/

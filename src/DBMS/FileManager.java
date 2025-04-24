@@ -8,6 +8,7 @@ import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
+import DBMS.BitmapIndex;
 
 public class FileManager 
 {
