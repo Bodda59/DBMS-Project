@@ -408,7 +408,19 @@ public class DBApp
 		int recordsNumbers=((int) table.getPages().getLast()*dataPageSize)+lastRecordlength;
 
 		int pagesCount=(int) table.getPages().getLast()+1;
-		result+="Pages Count: "+pagesCount+", Records Count: "+recordsNumbers;
+
+		String temps="[";
+		for(int i=0;i<table.getIndexedColumns().size();i++)
+		{
+			if(i==table.getIndexedColumns().size()-1)
+			{
+				temps+=table.getIndexedColumns().get(i);
+			}else{
+				temps+=table.getIndexedColumns().get(i)+", ";
+			}
+		}
+		temps+="]";
+		result+="Pages Count: "+pagesCount+", Records Count: "+recordsNumbers+", Indexed Columns: "+temps;
 		return result;
 	}
 	
@@ -444,17 +456,21 @@ public class DBApp
 
 			}
 		}
+		table.addTrace("Validating records: "+result.size()+" records missing.");
+		storeTable(tableName,table);
 		return result;
 	}
 
 	public static void recoverRecords(String tableName, ArrayList<String[]> missing){
-
+		int recordsCount=0;
+		ArrayList<String> pagesrecords= new ArrayList<>();
 		Table table= FileManager.loadTable(tableName);
 		int pagesNumbers= table.getPages().size();
 		HashMap<String, ArrayList<String[]>> recordsMap= table.getOriginalRecords();
 
 		for(int i=0;i<pagesNumbers;i++)
 		{
+
 			Page page= FileManager.loadTablePage(tableName,i);
 			if(page==null)
 			{
@@ -467,14 +483,32 @@ public class DBApp
 					for(int j=0;j<temp.size();j++)
 					{
 						newPage.addRecord(temp.get(j));
+						recordsCount++;
 					}
+					pagesrecords.add(""+i);
 					storeTablePage(tableName,i,newPage);
 				}
 
 			}
 			storeTable(tableName,table);
 		}
+		String temps="[";
+		for(int i=0;i<pagesrecords.size();i++)
+		{
+			if(i==pagesrecords.size()-1)
+			{
+				temps+=pagesrecords.get(i)+"]";
+			}
+			else
+			{
+				temps+=pagesrecords.get(i)+", ";
+			}
 
+		}
+
+
+		table.addTrace("Recovering "+recordsCount+" in pages: "+temps+".");
+		storeTable(tableName,table);
 	}
 	public static void createBitMapIndex(String tableName, String colName) {
 		Table table = loadTable(tableName);
@@ -529,6 +563,7 @@ public class DBApp
 		bitmapIndex.setRecordCount(globalRowIndex); // Total rows processed
 		bitmapIndex.setUniqueValues(uniqueValues);
 
+		table.addIndexedColumns(colName);
 		storeTableIndex(tableName, colName, bitmapIndex);
 	}
 	public static String getValueBits(String tableName, String colName, String value) {
@@ -660,44 +695,53 @@ public class DBApp
 	{
 		FileManager.reset();
 
+		FileManager.reset();
 		String[] cols = {"id","name","major","semester","gpa"};
 		createTable("student", cols);
 		String[] r1 = {"1", "stud1", "CS", "5", "0.9"};
 		insert("student", r1);
+
 		String[] r2 = {"2", "stud2", "BI", "7", "1.2"};
 		insert("student", r2);
+
 		String[] r3 = {"3", "stud3", "CS", "2", "2.4"};
 		insert("student", r3);
-		createBitMapIndex("student", "gpa");
-		createBitMapIndex("student", "major");
-		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
-		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
+
 		String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
 		insert("student", r4);
+
 		String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
 		insert("student", r5);
-		System.out.println("After new insertions:");
-		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
-		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
 
-		String[] r6 = {"6", "stud5", "CS", "4", "1.2"};
-		insert("student", r6);
-		System.out.println("After new insertions:");
-		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
-		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
-		String[] r7 = {"6", "stud5", "BI", "8", "1.44"};
-		insert("student", r7);
-		System.out.println("After new insertions:");
-		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
-		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
-		System.out.println("Output of selection using index when all columns ofthe select conditions are indexed:");
-		ArrayList<String[]> result1 = selectIndex("student", new String[]{"major","semester","gpa"}, new String[] {"CS","9","1.2"});
-		for (String[] array : result1) {
-			for (String str : array) {
-				System.out.print(str + " ");
-			}
-			System.out.println();
+		//////// This is the code used to delete pages from the table
+		System.out.println("File Manager trace before deleting pages: "
+				+FileManager.trace());
+				String path =
+						FileManager.class.getResource("FileManager.class").toString();
+		File directory = new File(path.substring(6,path.length()-17) +
+				File.separator
+				+ "Tables//student" + File.separator);
+		File[] contents = directory.listFiles();
+		int[] pageDel = {0,2};
+		for(int i=0;i<pageDel.length;i++)
+		{
+			contents[pageDel[i]].delete();
 		}
+////////End of deleting pages code
+		System.out.println("File Manager trace after deleting pages:"
+				+FileManager.trace());
+				ArrayList<String[]> tr = validateRecords("student");
+		System.out.println("Missing records count: "+tr.size());
+		recoverRecords("student", tr);
+		System.out.println("--------------------------------");
+		System.out.println("Recovering the missing records.");
+		tr = validateRecords("student");
+		System.out.println("Missing record count: "+tr.size());
+		System.out.println("File Manager trace after recovering missing records: "
+				+FileManager.trace());
+				System.out.println("--------------------------------");
+		System.out.println("Full trace of the table: ");
+		System.out.println(getFullTrace("student"));
 
 
 

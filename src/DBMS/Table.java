@@ -13,6 +13,8 @@ public class Table implements Serializable {
     //For the Tracing functions
     private ArrayList<String> traces;
 
+    private ArrayList<String> indexedColumns;
+
     //For the recovery of records
     private HashMap<String, ArrayList<String []>> originalRecords;
 
@@ -20,6 +22,7 @@ public class Table implements Serializable {
         this.tableName = tableName;
         this.columnsNames = columnsNames;
         this.pages = new ArrayList<>();
+        this.indexedColumns=new ArrayList<>();
 
         //For the tracing functions
         this.traces = new ArrayList<>();
@@ -103,5 +106,13 @@ public class Table implements Serializable {
 
     public HashMap<String, ArrayList<String[]>> getOriginalRecords() {
         return originalRecords;
+    }
+
+    public void addIndexedColumns(String indexcol) {
+        indexedColumns.add(indexcol);
+    }
+
+    public ArrayList<String> getIndexedColumns() {
+        return indexedColumns;
     }
 }
