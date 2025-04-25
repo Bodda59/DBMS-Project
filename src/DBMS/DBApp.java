@@ -695,57 +695,53 @@ public class DBApp
 	{
 		FileManager.reset();
 
-		FileManager.reset();
-		String[] cols = {"id","name","major","semester","gpa"};
-		createTable("student", cols);
-		String[] r1 = {"1", "stud1", "CS", "5", "0.9"};
-		insert("student", r1);
+        String[] cols = {"id","name","major","semester","gpa"};
+        createTable("student", cols);
+        String[] r1 = {"1", "stud1", "CS", "5", "0.9"};
+        insert("student", r1);
 
-		String[] r2 = {"2", "stud2", "BI", "7", "1.2"};
-		insert("student", r2);
+        String[] r2 = {"2", "stud2", "BI", "7", "1.2"};
+        insert("student", r2);
 
-		String[] r3 = {"3", "stud3", "CS", "2", "2.4"};
-		insert("student", r3);
+        String[] r3 = {"3", "stud3", "CS", "2", "2.4"};
+        insert("student", r3);
 
-		String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
-		insert("student", r4);
+        String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
+        insert("student", r4);
 
-		String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
-		insert("student", r5);
+        String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
+        insert("student", r5);
 
-		//////// This is the code used to delete pages from the table
-		System.out.println("File Manager trace before deleting pages: "
-				+FileManager.trace());
-				String path =
-						FileManager.class.getResource("FileManager.class").toString();
-		File directory = new File(path.substring(6,path.length()-17) +
-				File.separator
-				+ "Tables//student" + File.separator);
-		File[] contents = directory.listFiles();
-		int[] pageDel = {0,2};
-		for(int i=0;i<pageDel.length;i++)
-		{
-			contents[pageDel[i]].delete();
-		}
+        //////// This is the code used to delete pages from the table
+        System.out.println("File Manager trace before deleting pages: "
+                +FileManager.trace());
+                String path =
+                        FileManager.class.getResource("FileManager.class").toString();
+        File directory = new File(path.substring(6,path.length()-17) +
+                File.separator
+                + "Tables//student" + File.separator);
+        File[] contents = directory.listFiles();
+        int[] pageDel = {0,2};
+        for(int i=0;i<pageDel.length;i++)
+        {
+            contents[pageDel[i]].delete();
+        }
 ////////End of deleting pages code
-		System.out.println("File Manager trace after deleting pages:"
-				+FileManager.trace());
-				ArrayList<String[]> tr = validateRecords("student");
-		System.out.println("Missing records count: "+tr.size());
-		recoverRecords("student", tr);
-		System.out.println("--------------------------------");
-		System.out.println("Recovering the missing records.");
-		tr = validateRecords("student");
-		System.out.println("Missing record count: "+tr.size());
-		System.out.println("File Manager trace after recovering missing records: "
-				+FileManager.trace());
-				System.out.println("--------------------------------");
-		System.out.println("Full trace of the table: ");
-		System.out.println(getFullTrace("student"));
-
-
-
-		FileManager.reset();
+        System.out.println("File Manager trace after deleting pages: "
+                +FileManager.trace());
+                ArrayList<String[]> tr = validateRecords("student");
+        System.out.println("Missing records count: "+tr.size());
+        recoverRecords("student", tr);
+        System.out.println("--------------------------------");
+        System.out.println("Recovering the missing records.");
+        tr = validateRecords("student");
+        System.out.println("Missing record count: "+tr.size());
+        System.out.println("File Manager trace after recovering missing records: "
+                +FileManager.trace());
+                System.out.println("--------------------------------");
+        System.out.println("Full trace of the table: ");
+        System.out.println(getFullTrace("student"));
+        FileManager.reset();
 
 	}
 }
