@@ -3,6 +3,7 @@ package DBMS;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 public class Table implements Serializable {
     private String tableName;
@@ -12,43 +13,44 @@ public class Table implements Serializable {
     //For the Tracing functions
     private ArrayList<String> traces;
 
+    //For the recovery of records
+    private HashMap<String, ArrayList<String []>> originalRecords;
+
     public Table(String tableName, String[] columnsNames) {
         this.tableName = tableName;
         this.columnsNames = columnsNames;
         this.pages = new ArrayList<>();
 
         //For the tracing functions
-        this.traces=new ArrayList<>();
-        this.traces.add("Table created name:"+tableName+", columnsNames:"+getColumnsTrace(columnsNames));
+        this.traces = new ArrayList<>();
+        this.traces.add("Table created name:" + tableName + ", columnsNames:" + getColumnsTrace(columnsNames));
+
+        //For the recovery of records
+        this.originalRecords= new HashMap<>();
     }
 
 
-
     //For the tracing functions
-    public String getColumnsTrace(String[] columnsNames)
-    {
-        String result="[";
-        for(int i=0;i<columnsNames.length;i++) {
-            if(i==columnsNames.length-1)
-                result+=columnsNames[i]+"]";
+    public String getColumnsTrace(String[] columnsNames) {
+        String result = "[";
+        for (int i = 0; i < columnsNames.length; i++) {
+            if (i == columnsNames.length - 1)
+                result += columnsNames[i] + "]";
             else
-            result+= columnsNames[i] + ", ";
+                result += columnsNames[i] + ", ";
         }
         return result;
     }
 
-    public void addTrace(String newTrace)
-    {
+    public void addTrace(String newTrace) {
         traces.add(newTrace);
     }
 
-    public String getLastTrace()
-    {
+    public String getLastTrace() {
         return traces.getLast();
     }
 
-    public ArrayList<String> getAllTraces()
-    {
+    public ArrayList<String> getAllTraces() {
         return traces;
     }
 
@@ -68,7 +70,7 @@ public class Table implements Serializable {
         pages.add(pageNumber);
     }
 
-    public  ArrayList<Integer> getColumnNumber(String[] cols) {
+    public ArrayList<Integer> getColumnNumber(String[] cols) {
         ArrayList<Integer> res = new ArrayList<>();
         for (String col : cols) {
             boolean found = false;
@@ -84,5 +86,22 @@ public class Table implements Serializable {
             }
         }
         return res;
+    }
+
+    //For getting the original Records
+    public boolean addOriginalRecords(String [] record, int index) {
+        String indexed = Integer.toString(index);
+        if (originalRecords.containsKey(indexed)) {
+            originalRecords.get(indexed).add(record);
+        } else {
+            ArrayList<String []> newArray = new ArrayList<>();
+            newArray.add(record);
+            originalRecords.put(indexed, newArray);
+        }
+        return true;
+    }
+
+    public HashMap<String, ArrayList<String[]>> getOriginalRecords() {
+        return originalRecords;
     }
 }

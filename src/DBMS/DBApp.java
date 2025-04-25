@@ -180,10 +180,16 @@ public class DBApp
 
 			long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
 			table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:0, execution time (mil):" + totalExecutionTime);
-			storeTable(tableName, table);
 
 			// ✅ Update bitmap indexes
 			updateBitmapIndexesIfPresent(tableName, record);
+
+			//TODO DID SOMETHING HERE
+			table.addOriginalRecords(record,0);
+			//TODO FINISHED THAT SOMETHING
+
+			storeTable(tableName, table);
+
 			return;
 		}
 
@@ -195,10 +201,17 @@ public class DBApp
 
 			long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
 			table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:" + lastPageNumber + ", execution time (mil):" + totalExecutionTime);
-			storeTable(tableName, table);
 
 			// ✅ Update bitmap indexes
 			updateBitmapIndexesIfPresent(tableName, record);
+
+			//TODO DID SOMETHING HERE
+			table.addOriginalRecords(record,lastPageNumber);
+			//TODO FINISHED THAT SOMETHING
+
+			storeTable(tableName, table);
+
+
 		} else {
 			int newPageNumber = lastPageNumber + 1;
 			Page newPage = new Page(newPageNumber);
@@ -210,10 +223,16 @@ public class DBApp
 
 			long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
 			table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:" + newPageNumber + ", execution time (mil):" + totalExecutionTime);
-			storeTable(tableName, table);
 
 			// ✅ Update bitmap indexes
 			updateBitmapIndexesIfPresent(tableName, record);
+			//TODO DID SOMETHING HERE
+			table.addOriginalRecords(record,newPageNumber);
+			//TODO FINISHED THAT SOMETHING
+
+			storeTable(tableName, table);
+
+
 		}
 	}
 	private static void updateBitmapIndexesIfPresent(String tableName, String[] record) {
@@ -401,11 +420,62 @@ public class DBApp
 		return table.getLastTrace();
 	}
 
-/*	public static ArrayList<String []> validateRecords(String tableName){
+	public static ArrayList<String []> validateRecords(String tableName){
+		Table table= FileManager.loadTable(tableName);
+		int pagesNumbers= table.getPages().size();
+		HashMap<String, ArrayList<String[]>> recordsMap= table.getOriginalRecords();
+
+		ArrayList<String[]> result=new ArrayList<>();
+		for(int i=0;i<pagesNumbers;i++)
+		{
+			Page page= FileManager.loadTablePage(tableName,i);
+			if(page==null)
+			{
+				ArrayList <String[]> temp=  recordsMap.get(Integer.toString(i));
+				if (temp == null) {
+					System.out.println("No records found in originalRecords for page Number: " + i);
+				}else
+				{
+					for(int j=0;j<temp.size();j++)
+					{
+						result.add(temp.get(j));
+					}
+				}
+
+			}
+		}
+		return result;
 	}
+
 	public static void recoverRecords(String tableName, ArrayList<String[]> missing){
 
-	}*/
+		Table table= FileManager.loadTable(tableName);
+		int pagesNumbers= table.getPages().size();
+		HashMap<String, ArrayList<String[]>> recordsMap= table.getOriginalRecords();
+
+		for(int i=0;i<pagesNumbers;i++)
+		{
+			Page page= FileManager.loadTablePage(tableName,i);
+			if(page==null)
+			{
+				ArrayList <String[]> temp=  recordsMap.get(Integer.toString(i));
+				if (temp == null) {
+					System.out.println("No records found in originalRecords for page Number: " + i);
+				}else
+				{
+					Page newPage= new Page(i);
+					for(int j=0;j<temp.size();j++)
+					{
+						newPage.addRecord(temp.get(j));
+					}
+					storeTablePage(tableName,i,newPage);
+				}
+
+			}
+			storeTable(tableName,table);
+		}
+
+	}
 	public static void createBitMapIndex(String tableName, String colName) {
 		Table table = loadTable(tableName);
 		String[] columns = table.getColumnsNames();
@@ -588,7 +658,8 @@ public class DBApp
 	}
 	public static void main(String []args) throws IOException
 	{
-		reset();
+		FileManager.reset();
+
 		String[] cols = {"id","name","major","semester","gpa"};
 		createTable("student", cols);
 		String[] r1 = {"1", "stud1", "CS", "5", "0.9"};
@@ -627,5 +698,10 @@ public class DBApp
 			}
 			System.out.println();
 		}
+
+
+
+		FileManager.reset();
+
 	}
 }
