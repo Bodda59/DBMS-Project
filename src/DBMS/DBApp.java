@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 import static DBMS.FileManager.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class DBApp
 {
@@ -154,87 +156,78 @@ public class DBApp
 			updateBitmapIndexes(tableName, record);
 		}
 	}*/
-	public static void insert(String tableName, String[] record) {
-		Calendar calendar = Calendar.getInstance();
-		long currentTime = calendar.getTimeInMillis();
+public static void insert(String tableName, String[] record) {
+	Calendar calendar = Calendar.getInstance();
+	long currentTime = calendar.getTimeInMillis();
 
-		Table table = loadTable(tableName);
-		if (table == null) {
-			throw new IllegalArgumentException("Table " + tableName + " does not exist.");
-		}
-
-		ArrayList<String> result = new ArrayList<>();
-		for (String i : record) {
-			result.add(i);
-		}
-
-		ArrayList<Integer> pages = table.getPages();
-		int sizeOfPages = pages.size();
-
-		if (sizeOfPages == 0) {
-			Page page = new Page(0);
-			page.addRecord(record);
-			table.addPage(0);
-			storeTablePage(tableName, 0, page);
-			storeTable(tableName, table);
-
-			long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
-			table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:0, execution time (mil):" + totalExecutionTime);
-
-			// ✅ Update bitmap indexes
-			updateBitmapIndexesIfPresent(tableName, record);
-
-			//TODO DID SOMETHING HERE
-			table.addOriginalRecords(record,0);
-			//TODO FINISHED THAT SOMETHING
-
-			storeTable(tableName, table);
-
-			return;
-		}
-
-		Integer lastPageNumber = pages.getLast();
-		Page lastPage = loadTablePage(tableName, lastPageNumber);
-
-		if (lastPage.addRecord(record)) {
-			storeTablePage(tableName, lastPageNumber, lastPage);
-
-			long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
-			table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:" + lastPageNumber + ", execution time (mil):" + totalExecutionTime);
-
-			// ✅ Update bitmap indexes
-			updateBitmapIndexesIfPresent(tableName, record);
-
-			//TODO DID SOMETHING HERE
-			table.addOriginalRecords(record,lastPageNumber);
-			//TODO FINISHED THAT SOMETHING
-
-			storeTable(tableName, table);
-
-
-		} else {
-			int newPageNumber = lastPageNumber + 1;
-			Page newPage = new Page(newPageNumber);
-			newPage.addRecord(record);
-			table.addPage(newPageNumber);
-
-			storeTablePage(tableName, newPageNumber, newPage);
-			storeTable(tableName, table);
-
-			long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
-			table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:" + newPageNumber + ", execution time (mil):" + totalExecutionTime);
-
-			// ✅ Update bitmap indexes
-			updateBitmapIndexesIfPresent(tableName, record);
-			//TODO DID SOMETHING HERE
-			table.addOriginalRecords(record,newPageNumber);
-			//TODO FINISHED THAT SOMETHING
-
-			storeTable(tableName, table);
-
-
-		}
+	Table table = loadTable(tableName);
+	if (table == null) {
+		throw new IllegalArgumentException("Table " + tableName + " does not exist.");
 	}
+
+	ArrayList<String> result = new ArrayList<>();
+	for (String i : record) {
+		result.add(i);
+	}
+
+	ArrayList<Integer> pages = table.getPages();
+	int sizeOfPages = pages.size();
+
+	if (sizeOfPages == 0) {
+		// No pages yet, create the first page and insert the record
+		Page page = new Page(0);
+		page.addRecord(record);
+		table.addPage(0);
+		storeTablePage(tableName, 0, page);
+		storeTable(tableName, table);
+
+		long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
+		table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:0, execution time (mil):" + totalExecutionTime);
+
+		// ✅ Create bitmap index for any columns if they exist and update for the first record
+		updateBitmapIndexesIfPresent(tableName, record);
+
+		table.addOriginalRecords(record, 0);
+
+		storeTable(tableName, table);
+		return;
+	}
+
+	Integer lastPageNumber = pages.getLast();
+	Page lastPage = loadTablePage(tableName, lastPageNumber);
+
+	if (lastPage.addRecord(record)) {
+		storeTablePage(tableName, lastPageNumber, lastPage);
+
+		long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
+		table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:" + lastPageNumber + ", execution time (mil):" + totalExecutionTime);
+
+		// ✅ Update bitmap indexes
+		updateBitmapIndexesIfPresent(tableName, record);
+
+		table.addOriginalRecords(record, lastPageNumber);
+
+		storeTable(tableName, table);
+
+	} else {
+		int newPageNumber = lastPageNumber + 1;
+		Page newPage = new Page(newPageNumber);
+		newPage.addRecord(record);
+		table.addPage(newPageNumber);
+
+		storeTablePage(tableName, newPageNumber, newPage);
+		storeTable(tableName, table);
+
+		long totalExecutionTime = calendar.getTimeInMillis() - currentTime;
+		table.addTrace("Inserted:" + getRecordsTrace(record) + ", at page number:" + newPageNumber + ", execution time (mil):" + totalExecutionTime);
+
+		// ✅ Update bitmap indexes
+		updateBitmapIndexesIfPresent(tableName, record);
+
+		table.addOriginalRecords(record, newPageNumber);
+		storeTable(tableName, table);
+	}
+}
 	private static void updateBitmapIndexesIfPresent(String tableName, String[] record) {
 		Table table = loadTable(tableName);
 		String[] columnNames = table.getColumnsNames();
@@ -260,20 +253,23 @@ public class DBApp
 			HashMap<String, BitSet> indexMap = bitmapIndex.getIndex();
 			String valueInRecord = record[i];
 
-			for (Map.Entry<String, BitSet> entry : indexMap.entrySet()) {
-				BitSet bitset = entry.getValue();
-				if (entry.getKey().equals(valueInRecord)) {
-					bitset.set(bitmapIndex.getRecordCount(), true);  // 1 for match
-				} else {
-					bitset.set(bitmapIndex.getRecordCount(), false); // 0 otherwise
-				}
+			// Initialize a BitSet for the value if it's not already present
+			if (!indexMap.containsKey(valueInRecord)) {
+				indexMap.put(valueInRecord, new BitSet());
 			}
 
-			bitmapIndex.setRecordCount(bitmapIndex.getRecordCount() + 1);
+			BitSet bitset = indexMap.get(valueInRecord);
+			int recordCount = bitmapIndex.getRecordCount();
+
+			// Set the bit for the current record (1 for match)
+			bitset.set(recordCount, true);
+
+			// Increment the record count
+			bitmapIndex.setRecordCount(recordCount + 1);
+
 			storeTableIndex(tableName, colName, bitmapIndex);
 		}
 	}
-	
 	public static ArrayList<String []> select(String tableName)
 	{
 		Calendar calendar=Calendar.getInstance();
@@ -392,35 +388,38 @@ public class DBApp
 
 
 
-	
-	public static String getFullTrace(String tableName)
-	{
-		Table table= loadTable(tableName);
-		ArrayList<String> temp=table.getAllTraces();
-		String result="";
-		for(String i: temp)
-		{
-			result+=i+"\n";
+
+	public static String getFullTrace(String tableName) {
+		Table table = loadTable(tableName);
+		ArrayList<String> temp = table.getAllTraces();
+		String result = "";
+
+		for (String i : temp) {
+			result += i + "\n";
 		}
-		//For Tracing
-		Page lastPage= loadTablePage(tableName,table.getPages().getLast());
-		int lastRecordlength=lastPage.getRecords().size();
-		int recordsNumbers=((int) table.getPages().getLast()*dataPageSize)+lastRecordlength;
 
-		int pagesCount=(int) table.getPages().getLast()+1;
+		ArrayList<Integer> pages = table.getPages();
+		int recordsNumbers = 0;
+		int pagesCount = 0;
 
-		String temps="[";
-		for(int i=0;i<table.getIndexedColumns().size();i++)
-		{
-			if(i==table.getIndexedColumns().size()-1)
-			{
-				temps+=table.getIndexedColumns().get(i);
-			}else{
-				temps+=table.getIndexedColumns().get(i)+", ";
+		if (!pages.isEmpty()) {
+			Page lastPage = loadTablePage(tableName, pages.getLast());
+			int lastRecordLength = lastPage.getRecords().size();
+			recordsNumbers = (pages.getLast() * dataPageSize) + lastRecordLength;
+			pagesCount = pages.getLast() + 1;
+		}
+
+		String temps = "[";
+		for (int i = 0; i < table.getIndexedColumns().size(); i++) {
+			if (i == table.getIndexedColumns().size() - 1) {
+				temps += table.getIndexedColumns().get(i);
+			} else {
+				temps += table.getIndexedColumns().get(i) + ", ";
 			}
 		}
-		temps+="]";
-		result+="Pages Count: "+pagesCount+", Records Count: "+recordsNumbers+", Indexed Columns: "+temps;
+		temps += "]";
+		result += "Pages Count: " + pagesCount + ", Records Count: " + recordsNumbers + ", Indexed Columns: " + temps;
+
 		return result;
 	}
 	
@@ -572,11 +571,19 @@ public class DBApp
 	}
 	public static String getValueBits(String tableName, String colName, String value) {
 		BitmapIndex bitmapIndex = loadTableIndex(tableName, colName);
+		if(bitmapIndex==null)
+		{
+			return null;
+		}
 		HashMap<String, BitSet> indexMap = bitmapIndex.getIndex();
-
 		BitSet bits = indexMap.get(value);
 		if (bits == null) {
-			return null;
+			String s = "";
+			for(int  i=0;i<bitmapIndex.getRecordCount();i++)
+			{
+				s+="0";
+			}
+			return s;
 		}
 
 		int totalBits = bitmapIndex.getRecordCount(); // total number of rows
@@ -654,7 +661,8 @@ public class DBApp
 		}
 		else if(notIndex.size()==cols.length)
 		{
-			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Non Indexed: "+notIndex.toString()+", "+"Indexed selection count: 1"+", "+"Final count: 1, execution time (mil):"+totalExecutionTime);
+			int x = result.size();
+			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Non Indexed: "+notIndex.toString()+", "+"Indexed selection count: 1"+", "+"Final count: " + x +"execution time (mil):"+totalExecutionTime);
 		}
 		else
 		{
@@ -839,5 +847,55 @@ public class DBApp
 		System.out.println(" --------------------------------");
 		System.out.println("The trace of the Tables Folder:");
 		System.out.println(FileManager.trace());
+	}*/
+/*	public static void main(String [] args){
+		FileManager.reset();
+
+		String[] cols0 = {"a","b","c","d","e","f","g","h","i","j","k","l","m"};
+		DBApp.createTable("chj", cols0);
+		String tableTrace0 = DBApp.getFullTrace("chj");
+		assertTrue("Full trace should report indexed columns.", tableTrace0.contains("Indexed Columns: "));
+		assertTrue("Full trace should report empty list when reporting indexed columns and non are.", tableTrace0.endsWith("[]"));
+		DBApp.createBitMapIndex("chj","a");
+		DBApp.createBitMapIndex("chj","b");
+		DBApp.createBitMapIndex("chj","c");
+		DBApp.createBitMapIndex("chj","d");
+		DBApp.createBitMapIndex("chj","e");
+		DBApp.createBitMapIndex("chj","f");
+		DBApp.createBitMapIndex("chj","g");
+		DBApp.createBitMapIndex("chj","h");
+		DBApp.createBitMapIndex("chj","i");
+		DBApp.createBitMapIndex("chj","j");
+		DBApp.createBitMapIndex("chj","k");
+		DBApp.createBitMapIndex("chj","l");
+		DBApp.createBitMapIndex("chj","m");
+		tableTrace0 = DBApp.getFullTrace("chj");
+		System.out.println(tableTrace0);
+		//--------------------------------------------------------------------------
+
+		FileManager.reset();
+	}*/
+	/*public static void main(String [] args){
+		FileManager.reset();
+		String[] cols = {"id","name","major","semester","gpa"};
+		createTable("student", cols);
+		String[] r1 = {"1", "stud1", "CS", "5", "0.9"};
+		insert("student", r1);
+		String[] r2 = {"2", "stud2", "BI", "7", "1.2"};
+		insert("student", r2);
+		String[] r3 = {"3", "stud3", "CS", "2", "2.4"};
+		insert("student", r3);
+		createBitMapIndex("student", "gpa");
+		createBitMapIndex("student", "major");
+		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
+		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
+		String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
+		insert("student", r4);
+		String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
+		insert("student", r5);
+		System.out.println("After new insertions:");
+		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
+		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
+		FileManager.reset();
 	}*/
 }
