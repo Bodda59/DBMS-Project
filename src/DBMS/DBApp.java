@@ -511,6 +511,7 @@ public class DBApp
 		storeTable(tableName,table);
 	}
 	public static void createBitMapIndex(String tableName, String colName) {
+		long startTime = System.currentTimeMillis();
 		Table table = loadTable(tableName);
 		String[] columns = table.getColumnsNames();
 		int columnIndex = -1;
@@ -562,8 +563,11 @@ public class DBApp
 		bitmapIndex.setIndex(indexMap);
 		bitmapIndex.setRecordCount(globalRowIndex); // Total rows processed
 		bitmapIndex.setUniqueValues(uniqueValues);
-
 		table.addIndexedColumns(colName);
+		long endTime = System.currentTimeMillis();
+		long totalExecutionTime=endTime-startTime;
+		table.addTrace("Index created for column: "+colName+", execution time (mil):"+totalExecutionTime);
+		storeTable(tableName,table);
 		storeTableIndex(tableName, colName, bitmapIndex);
 	}
 	public static String getValueBits(String tableName, String colName, String value) {
@@ -586,6 +590,8 @@ public class DBApp
 	}
 	public static ArrayList<String []> selectIndex(String tableName, String[] cols, String[] vals)
     {
+		ArrayList<String> indexedColumn = new ArrayList<>();
+		long startTime = System.currentTimeMillis();
 		ArrayList<String []> result = new ArrayList<>();
 		ArrayList<String> notIndex = new ArrayList<>();
 		ArrayList<String> newVals = new ArrayList<>();
@@ -599,6 +605,7 @@ public class DBApp
 				newVals.add(vals[i]);
 			}
 			else {
+				indexedColumn.add(cols[i]);
 				if(andResult.isEmpty()){
 					andResult=b.getIndex().get(vals[i]);
 				}
@@ -609,7 +616,7 @@ public class DBApp
 		}
 		if(notIndex.size()==cols.length)
 		{
-			return select(tableName,cols,vals);
+			result =  select(tableName,cols,vals);
 		}
 		else if(notIndex.isEmpty())
 		{
@@ -631,6 +638,29 @@ public class DBApp
 		else{
 			result = selectIndexHelp(tableName,andResult,notIndex,newVals);
 		}
+		long endTime = System.currentTimeMillis();
+		long totalExecutionTime = endTime - startTime;
+		ArrayList<String> column = new ArrayList<>();
+		ArrayList<String> values =new ArrayList<>();
+		for(int i=0;i<cols.length;i++)
+		{
+			column.add(cols[i]);
+			values.add(vals[i]);
+		}
+		Table tableHelp = loadTable(tableName);
+		if(indexedColumn.size()==cols.length)
+		{
+			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Indexed columns: "+indexedColumn.toString()+", "+"Indexed selection count: 1"+", "+"Final count: 1, execution time (mil):"+totalExecutionTime);
+		}
+		else if(notIndex.size()==cols.length)
+		{
+			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Non Indexed: "+notIndex.toString()+", "+"Indexed selection count: 1"+", "+"Final count: 1, execution time (mil):"+totalExecutionTime);
+		}
+		else
+		{
+			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Indexed columns: "+indexedColumn.toString()+", "+"Indexed selection count: 1"+", "+"Non Indexed: "+notIndex.toString()+", "+"Final count: 1, execution time (mil):"+totalExecutionTime);
+		}
+		storeTable(tableName,tableHelp);
 		return result;
 	}
 	public static ArrayList<String[]> selectIndexHelp(String tableName, BitSet andResult, ArrayList<String> cols, ArrayList<String> vals) {
@@ -663,13 +693,18 @@ public class DBApp
 		return result;
 	}
 	public static BitSet andBitSets(BitSet a, BitSet b) {
-		if (a.length() != b.length()) {
-			throw new IllegalArgumentException("BitSets must be of the same logical length.");
-		}
+		int maxLength = Math.max(a.length(), b.length());
 
-		BitSet result = (BitSet) a.clone(); // Create a copy to avoid mutating the original
-		result.and(b); // Perform bitwise AND
-		return result;
+		BitSet paddedA = (BitSet) a.clone();
+		BitSet paddedB = (BitSet) b.clone();
+
+		paddedA.set(maxLength); // ensure the BitSet reaches the same length
+		paddedA.clear(maxLength); // remove the last added bit
+		paddedB.set(maxLength);
+		paddedB.clear(maxLength);
+
+		paddedA.and(paddedB);
+		return paddedA;
 	}
 
 	public static ArrayList<Integer> getPositionsInSecondArray(ArrayList<String> first, String[] second) {
@@ -744,4 +779,65 @@ public class DBApp
         FileManager.reset();
 
 	}
+	/*public static void main(String []args) throws IOException
+	{
+		FileManager.reset();
+		String[] cols = {"id","name","major","semester","gpa"};
+		createTable("student", cols);
+		String[] r1 = {"1", "stud1", "CS", "5", "0.9"};
+		insert("student", r1);
+		String[] r2 = {"2", "stud2", "BI", "7", "1.2"};
+		insert("student", r2);
+		String[] r3 = {"3", "stud3", "CS", "2", "2.4"};
+		insert("student", r3);
+		createBitMapIndex("student", "gpa");
+		createBitMapIndex("student", "major");
+		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
+		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
+		String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
+		insert("student", r4);
+		String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
+		insert("student", r5);
+		System.out.println("After new insertions:");
+		System.out.println("Bitmap of the value of CS from the major index: "+getValueBits("student", "major", "CS"));
+		System.out.println("Bitmap of the value of 1.2 from the gpa index: "+getValueBits("student", "gpa", "1.2"));
+		System.out.println("Output of selection using index when all columns of the select conditions are indexed:");
+		ArrayList<String[]> result1 = selectIndex("student", new String[]
+				{"major","gpa"}, new String[] {"CS","1.2"});
+		for (String[] array : result1) {
+			for (String str : array) {
+				System.out.print(str + " ");
+			}
+			System.out.println();
+		}
+		System.out.println("Last trace of the table: "+getLastTrace("student"));
+		System.out.println(" --------------------------------");
+		System.out.println("Output of selection using index when only one columnof the columns of the select conditions are indexed:");
+		ArrayList<String[]> result2 = selectIndex("student", new String[]
+				{"major","semester"}, new String[] {"CS","5"});
+		for (String[] array : result2) {
+			for (String str : array) {
+				System.out.print(str + " ");
+			}
+			System.out.println();
+		}
+		System.out.println("Last trace of the table: "+getLastTrace("student"));
+		System.out.println(" --------------------------------");
+		System.out.println("Output of selection using index when some of the columns of the select conditions are indexed:");
+		ArrayList<String[]> result3 = selectIndex("student", new String[]
+				{"major","semester","gpa" }, new String[] {"CS","5", "0.9"});
+		for (String[] array : result3) {
+			for (String str : array) {
+				System.out.print(str + " ");
+			}
+			System.out.println();
+		}
+		System.out.println("Last trace of the table: "+getLastTrace("student"));
+		System.out.println(" --------------------------------");
+		System.out.println("Full Trace of the table:");
+		System.out.println(getFullTrace("student"));
+		System.out.println(" --------------------------------");
+		System.out.println("The trace of the Tables Folder:");
+		System.out.println(FileManager.trace());
+	}*/
 }
