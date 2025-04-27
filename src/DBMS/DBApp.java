@@ -506,7 +506,7 @@ public static void insert(String tableName, String[] record) {
 		}
 
 
-		table.addTrace("Recovering "+recordsCount+" in pages: "+temps+".");
+		table.addTrace("Recovering "+recordsCount+" records in pages: "+temps+".");
 		storeTable(tableName,table);
 	}
 	public static void createBitMapIndex(String tableName, String colName) {
