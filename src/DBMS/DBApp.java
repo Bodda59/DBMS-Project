@@ -14,7 +14,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 import static DBMS.FileManager.*;
-import static DBMS.MS2_Tests_01.genRandString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
