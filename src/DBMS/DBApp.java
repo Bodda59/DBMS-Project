@@ -14,13 +14,14 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
 import static DBMS.FileManager.*;
+import static DBMS.MS2_Tests_01.genRandString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class DBApp
 {
 	static int dataPageSize = 2;
-	
+
 	public static void createTable(String tableName, String[] columnsNames)
 	{
 		if (loadTable(tableName) != null) {
@@ -460,54 +461,108 @@ public static void insert(String tableName, String[] record) {
 		return result;
 	}
 
-	public static void recoverRecords(String tableName, ArrayList<String[]> missing){
-		int recordsCount=0;
-		ArrayList<String> pagesrecords= new ArrayList<>();
-		Table table= FileManager.loadTable(tableName);
-		int pagesNumbers= table.getPages().size();
-		HashMap<String, ArrayList<String[]>> recordsMap= table.getOriginalRecords();
+	public static void recoverRecords(String tableName, ArrayList<String[]> missing) {
+		long startTime = System.currentTimeMillis();
+		Table table = FileManager.loadTable(tableName);
+		if (table == null) {
+			throw new IllegalArgumentException("Table " + tableName + " does not exist.");
+		}
 
-		for(int i=0;i<pagesNumbers;i++)
-		{
+		int recordsCount = 0;
+		ArrayList<Integer> pagesRecovered = new ArrayList<>();
+		HashMap<String, ArrayList<String[]>> recordsMap = table.getOriginalRecords();
+		ArrayList<Integer> pages = table.getPages();
 
-			Page page= FileManager.loadTablePage(tableName,i);
-			if(page==null)
-			{
-				ArrayList <String[]> temp=  recordsMap.get(Integer.toString(i));
-				if (temp == null) {
-					System.out.println("No records found in originalRecords for page Number: " + i);
-				}else
-				{
-					Page newPage= new Page(i);
-					for(int j=0;j<temp.size();j++)
-					{
-						newPage.addRecord(temp.get(j));
+		// Recover records from missing list
+		if (missing != null && !missing.isEmpty()) {
+			HashMap<Integer, ArrayList<String[]>> recordsByPage = new HashMap<>();
+			for (String[] record : missing) {
+				Integer pageNum = findPageNumberForRecord(table, record);
+				if (pageNum != null && pages.contains(pageNum)) {
+					recordsByPage.computeIfAbsent(pageNum, k -> new ArrayList<>()).add(record);
+				}
+			}
+
+			for (Map.Entry<Integer, ArrayList<String[]>> entry : recordsByPage.entrySet()) {
+				int pageNum = entry.getKey();
+				ArrayList<String[]> recordsToRecover = entry.getValue();
+				Page page = FileManager.loadTablePage(tableName, pageNum);
+				if (page == null) {
+					page = new Page(pageNum);
+					if (!pages.contains(pageNum)) {
+						table.addPage(pageNum);
+					}
+				} else {
+					// Clear corrupted page to ensure all records are recovered
+					page.getRecords().clear();
+				}
+				for (String[] record : recordsToRecover) {
+					if (page.addRecord(record)) {
 						recordsCount++;
 					}
-					pagesrecords.add(""+i);
-					storeTablePage(tableName,i,newPage);
 				}
-
+				if (!storeTablePage(tableName, pageNum, page)) {
+					throw new IllegalStateException("Failed to store page " + pageNum + " for table " + tableName);
+				}
+				if (!pagesRecovered.contains(pageNum)) {
+					pagesRecovered.add(pageNum);
+				}
 			}
-			storeTable(tableName,table);
-		}
-		String temps="[";
-		for(int i=0;i<pagesrecords.size();i++)
-		{
-			if(i==pagesrecords.size()-1)
-			{
-				temps+=pagesrecords.get(i)+"]";
-			}
-			else
-			{
-				temps+=pagesrecords.get(i)+", ";
-			}
-
 		}
 
+		// Recover any completely missing pages not covered by missing list
+		for (int pageNum : pages) {
+			if (!pagesRecovered.contains(pageNum)) {
+				Page page = FileManager.loadTablePage(tableName, pageNum);
+				if (page == null) {
+					ArrayList<String[]> pageRecords = recordsMap.get(Integer.toString(pageNum));
+					if (pageRecords != null && !pageRecords.isEmpty()) {
+						page = new Page(pageNum);
+						for (String[] record : pageRecords) {
+							if (page.addRecord(record)) {
+								recordsCount++;
+							}
+						}
+						if (!storeTablePage(tableName, pageNum, page)) {
+							throw new IllegalStateException("Failed to store page " + pageNum + " for table " + tableName);
+						}
+						pagesRecovered.add(pageNum);
+					}
+				}
+			}
+		}
 
-		table.addTrace("Recovering "+recordsCount+" in pages: "+temps+".");
-		storeTable(tableName,table);
+		// Sort page numbers for consistent trace output
+		Collections.sort(pagesRecovered);
+
+		// Format page list
+		String pagesList = pagesRecovered.isEmpty() ? "[]" : Arrays.toString(pagesRecovered.toArray(new Integer[0]));
+
+		// Log trace
+		long executionTime = System.currentTimeMillis() - startTime;
+		table.addTrace("Recovering " + recordsCount + " records in pages: " + pagesList + ", execution time (mil):" + executionTime + ".");
+
+		// Store table
+		if (!storeTable(tableName, table)) {
+			throw new IllegalStateException("Failed to store table " + tableName);
+		}
+	}
+
+	// Helper method to find page number for a record
+	private static Integer findPageNumberForRecord(Table table, String[] record) {
+		HashMap<String, ArrayList<String[]>> recordsMap = table.getOriginalRecords();
+		for (Map.Entry<String, ArrayList<String[]>> entry : recordsMap.entrySet()) {
+			for (String[] storedRecord : entry.getValue()) {
+				if (Arrays.equals(storedRecord, record)) {
+					try {
+						return Integer.parseInt(entry.getKey());
+					} catch (NumberFormatException e) {
+						// Ignore invalid keys
+					}
+				}
+			}
+		}
+		return null;
 	}
 	public static void createBitMapIndex(String tableName, String colName) {
 		long startTime = System.currentTimeMillis();
@@ -595,81 +650,88 @@ public static void insert(String tableName, String[] record) {
 
 		return bitString.toString();
 	}
-	public static ArrayList<String []> selectIndex(String tableName, String[] cols, String[] vals)
-    {
+	public static ArrayList<String[]> selectIndex(String tableName, String[] cols, String[] vals) {
 		ArrayList<String> indexedColumn = new ArrayList<>();
 		long startTime = System.currentTimeMillis();
-		ArrayList<String []> result = new ArrayList<>();
+		ArrayList<String[]> result = new ArrayList<>();
 		ArrayList<String> notIndex = new ArrayList<>();
 		ArrayList<String> newVals = new ArrayList<>();
 		BitSet andResult = new BitSet();
-		for(int i=0;i<cols.length;i++)
-		{
-			BitmapIndex b = loadTableIndex(tableName,cols[i]);
-			if(b==null)
-			{
+		for (int i = 0; i < cols.length; i++) {
+			BitmapIndex b = loadTableIndex(tableName, cols[i]);
+			if (b == null) {
 				notIndex.add(cols[i]);
 				newVals.add(vals[i]);
-			}
-			else {
+			} else {
 				indexedColumn.add(cols[i]);
-				if(andResult.isEmpty()){
-					andResult=b.getIndex().get(vals[i]);
-				}
-				else{
-					andResult = andBitSets(andResult,b.getIndex().get(vals[i]));
+				if (andResult.isEmpty()) {
+					andResult = b.getIndex().get(vals[i]);
+				} else {
+					andResult = andBitSets(andResult, b.getIndex().get(vals[i]));
 				}
 			}
 		}
-		if(notIndex.size()==cols.length)
-		{
-			result =  select(tableName,cols,vals);
-		}
-		else if(notIndex.isEmpty())
-		{
+		if (notIndex.size() == cols.length) {
+			result = select(tableName, cols, vals);
+		} else if (notIndex.isEmpty()) {
 			Table table = loadTable(tableName);
 			ArrayList<Integer> pageNum = table.getPages();
-			for(int i=0;i<pageNum.size();i++)
-			{
-				Page pageData = loadTablePage(tableName,pageNum.get(i));
+			for (int i = 0; i < pageNum.size(); i++) {
+				Page pageData = loadTablePage(tableName, pageNum.get(i));
 				ArrayList<String[]> records = pageData.getRecords();
-				for(int j=0;j<records.size();j++)
-				{
-					if(andResult.get(j + (dataPageSize*i)))
-					{
+				for (int j = 0; j < records.size(); j++) {
+					if (andResult.get(j + (dataPageSize * i))) {
 						result.add(records.get(j));
 					}
 				}
 			}
-		}
-		else{
-			result = selectIndexHelp(tableName,andResult,notIndex,newVals);
+		} else {
+			result = selectIndexHelp(tableName, andResult, notIndex, newVals);
 		}
 		long endTime = System.currentTimeMillis();
 		long totalExecutionTime = endTime - startTime;
 		ArrayList<String> column = new ArrayList<>();
-		ArrayList<String> values =new ArrayList<>();
-		for(int i=0;i<cols.length;i++)
-		{
+		ArrayList<String> values = new ArrayList<>();
+		for (int i = 0; i < cols.length; i++) {
 			column.add(cols[i]);
 			values.add(vals[i]);
 		}
+		// Create sorted lists for trace
+		String[] sortedCols = cols.clone();
+		Arrays.sort(sortedCols);
+		ArrayList<String> sortedNotIndex = new ArrayList<>(notIndex);
+		Collections.sort(sortedNotIndex);
+		ArrayList<String> sortedIndexedColumn = new ArrayList<>(indexedColumn);
+		Collections.sort(sortedIndexedColumn);
 		Table tableHelp = loadTable(tableName);
-		if(indexedColumn.size()==cols.length)
-		{
-			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Indexed columns: "+indexedColumn.toString()+", "+"Indexed selection count: 1"+", "+"Final count: 1, execution time (mil):"+totalExecutionTime);
+		if (indexedColumn.size() == cols.length) {
+			// Case 1: All columns indexed
+			tableHelp.addTrace("Select index condition:" + column.toString() + "->" + values.toString() + ", " +
+					"Indexed columns: " + Arrays.toString(sortedIndexedColumn.toArray()) + ", " +
+					"Indexed selection count: " + countOnes(andResult) + ", " +
+					"Final count: " + result.size() + ", execution time (mil):" + totalExecutionTime);
+		} else if (notIndex.size() == cols.length) {
+			// Case 4: No indices
+			tableHelp.addTrace("Select index condition:" + column.toString() + "->" + values.toString() + ", " +
+					"Non Indexed: " + Arrays.toString(sortedCols) + ", " +
+					"Indexed selection count: 0" + ", " +
+					"Final count: " + result.size() + ", execution time (mil):" + totalExecutionTime);
+		} else {
+			// Case 2 or 3: Some columns indexed
+			tableHelp.addTrace("Select index condition:" + column.toString() + "->" + values.toString() + ", " +
+					"Indexed columns: " + Arrays.toString(sortedIndexedColumn.toArray()) + ", " +
+					"Indexed selection count: " + countOnes(andResult) + ", " +
+					"Non Indexed: " + Arrays.toString(sortedNotIndex.toArray()) + ", " +
+					"Final count: " + result.size() + ", execution time (mil):" + totalExecutionTime);
 		}
-		else if(notIndex.size()==cols.length)
-		{
-			int x = result.size();
-			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Non Indexed: "+notIndex.toString()+", "+"Indexed selection count: 1"+", "+"Final count: " + x +"execution time (mil):"+totalExecutionTime);
-		}
-		else
-		{
-			tableHelp.addTrace("Select index condition:"+column.toString()+"->"+values.toString()+", "+"Indexed columns: "+indexedColumn.toString()+", "+"Indexed selection count: 1"+", "+"Non Indexed: "+notIndex.toString()+", "+"Final count: 1, execution time (mil):"+totalExecutionTime);
-		}
-		storeTable(tableName,tableHelp);
+		storeTable(tableName, tableHelp);
 		return result;
+	}
+	public static int countOnes(BitSet bitSet) {
+		if (bitSet == null || bitSet.isEmpty()) {
+			return 0;
+		}
+		return bitSet.cardinality();
 	}
 	public static ArrayList<String[]> selectIndexHelp(String tableName, BitSet andResult, ArrayList<String> cols, ArrayList<String> vals) {
 		ArrayList<String[]> result = new ArrayList<>();
@@ -734,7 +796,7 @@ public static void insert(String tableName, String[] record) {
 
 		return positions;
 	}
-	public static void main(String []args) throws IOException
+	/*public static void main(String []args) throws IOException
 	{
 		FileManager.reset();
 
@@ -747,13 +809,13 @@ public static void insert(String tableName, String[] record) {
         insert("student", r2);
 
         String[] r3 = {"3", "stud3", "CS", "2", "2.4"};
-        insert("student", r3);
+       insert("student", r3);
 
-        String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
-        insert("student", r4);
+       String[] r4 = {"4", "stud4", "CS", "9", "1.2"};
+       insert("student", r4);
 
-        String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
-        insert("student", r5);
+       String[] r5 = {"5", "stud5", "BI", "4", "3.5"};
+       insert("student", r5);
 
         //////// This is the code used to delete pages from the table
         System.out.println("File Manager trace before deleting pages: "
@@ -764,19 +826,19 @@ public static void insert(String tableName, String[] record) {
                 File.separator
                 + "Tables//student" + File.separator);
         File[] contents = directory.listFiles();
-        int[] pageDel = {0,2};
+       int[] pageDel = {0,2};
         for(int i=0;i<pageDel.length;i++)
         {
             contents[pageDel[i]].delete();
-        }
-////////End of deleting pages code
+      }
+//////////End of deleting pages code
         System.out.println("File Manager trace after deleting pages: "
                 +FileManager.trace());
                 ArrayList<String[]> tr = validateRecords("student");
         System.out.println("Missing records count: "+tr.size());
         recoverRecords("student", tr);
         System.out.println("--------------------------------");
-        System.out.println("Recovering the missing records.");
+       System.out.println("Recovering the missing records.");
         tr = validateRecords("student");
         System.out.println("Missing record count: "+tr.size());
         System.out.println("File Manager trace after recovering missing records: "
@@ -786,7 +848,7 @@ public static void insert(String tableName, String[] record) {
         System.out.println(getFullTrace("student"));
         FileManager.reset();
 
-	}
+	}*/
 	/*public static void main(String []args) throws IOException
 	{
 		FileManager.reset();
@@ -822,7 +884,7 @@ public static void insert(String tableName, String[] record) {
 		System.out.println(" --------------------------------");
 		System.out.println("Output of selection using index when only one columnof the columns of the select conditions are indexed:");
 		ArrayList<String[]> result2 = selectIndex("student", new String[]
-				{"major","semester"}, new String[] {"CS","5"});
+				{"id","major","semester"}, new String[] {"1","CS","5"});
 		for (String[] array : result2) {
 			for (String str : array) {
 				System.out.print(str + " ");
@@ -848,6 +910,7 @@ public static void insert(String tableName, String[] record) {
 		System.out.println("The trace of the Tables Folder:");
 		System.out.println(FileManager.trace());
 	}*/
+
 /*	public static void main(String [] args){
 		FileManager.reset();
 
